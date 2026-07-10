@@ -3,16 +3,14 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Factory Inventory System Prototype</title>
-  <!-- Load React and Babel from CDNs -->
-  <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
-  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
-  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-  <!-- Load Lucide Icons -->
-  <script src="https://unpkg.com/lucide@0.400.0/dist/umd/lucide.min.js"></script>
+  <title>Pactics Factory Inventory</title>
+  <!-- Load React and Babel from stable production CDNs -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js" crossorigin></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.22.17/babel.min.js"></script>
   <style>
     body { background: #e7eaee; padding: 20px; margin: 0; font-family: ui-sans-serif, system-ui, "Khmer OS Battambang", "Kantumruy Pro", sans-serif; }
-    .fia-root{
+    .fia-root {
       --bg:#e7eaee; --panel:#ffffff; --panel2:#f4f6f8; --ink:#182029;
       --ink2:#5b6673; --muted:#8a94a0; --line:#d5dbe2;
       --accent:#175ca8; --accent-bg:#e7f0f9;
@@ -22,28 +20,25 @@
       border-radius:12px;overflow:hidden;max-width:1120px;margin:0 auto;
       box-shadow: 0 4px 12px rgba(0,0,0,0.05);
     }
-    .fia-root *{box-sizing:border-box;}
-    .mono{font-family:ui-monospace,"SF Mono",Menlo,monospace;}
-    .r{text-align:right;} .muted{color:var(--muted);}
-    .iconbtn{border:0;background:transparent;color:var(--ink2);cursor:pointer;display:grid;place-items:center;padding:4px;border-radius:6px;}
-    .iconbtn:hover{background:var(--panel2);color:var(--ink);}
-    .fia-head{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:13px 18px;background:var(--ink);color:#fff;flex-wrap:wrap;}
-    .fia-brand{display:flex;align-items:center;gap:11px;}
-    .fia-brand i { color: #8fb8e6; display: inline-flex; align-items: center; justify-content: center; font-style: normal; }
-    .fia-title{font-size:15px;font-weight:650;letter-spacing:-.01em;}
-    .fia-sub{font-size:11px;color:#9fb0c2;margin-top:1px;}
+    .fia-root * { box-sizing:border-box; }
+    .mono { font-family:ui-monospace,"SF Mono",Menlo,monospace; }
+    .r { text-align:right; } .muted { color:var(--muted); }
+    .fia-head { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:13px 18px; background:var(--ink); color:#fff; flex-wrap:wrap; }
+    .fia-brand { display:flex; align-items:center; gap:11px; }
+    .fia-title { font-size:15px; font-weight:650; letter-spacing:-.01em; }
+    .fia-sub { font-size:11px; color:#9fb0c2; margin-top:1px; }
     .fia-right-controls { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
     
     .lang-toggle { display: flex; background: #0f151c; border-radius: 6px; padding: 2px; border: 1px solid #2c3e50; }
     .lang-btn { background: transparent; border: 0; color: #9fb0c2; font-size: 11.5px; font-weight: 600; padding: 4px 8px; border-radius: 4px; cursor: pointer; transition: .12s; }
     .lang-btn.on { background: var(--accent); color: #fff; }
     
-    .fia-nav{display:flex;background:#0f151c;border-radius:9px;padding:3px;}
-    .fia-tab{display:flex;align-items:center;gap:6px;border:0;background:transparent;color:#9fb0c2;
-      font-size:12.5px;font-weight:550;padding:7px 14px;border-radius:6px;cursor:pointer;transition:.12s;}
-    .fia-tab:hover{color:#fff;}
-    .fia-tab.on{background:var(--accent);color:#fff;}
-    .fia-badge{background:var(--bad);color:#fff;font-size:10px;font-weight:700;padding:0 6px;border-radius:20px;line-height:16px;margin-left:4px;}
+    .fia-nav { display:flex; background:#0f151c; border-radius:9px; padding:3px; }
+    .fia-tab { display:flex; align-items:center; gap:6px; border:0; background:transparent; color:#9fb0c2;
+      font-size:12.5px; font-weight:550; padding:7px 14px; border-radius:6px; cursor:pointer; transition:.12s; }
+    .fia-tab:hover { color:#fff; }
+    .fia-tab.on { background:var(--accent); color:#fff; }
+    .fia-badge { background:var(--bad); color:#fff; font-size:10px; font-weight:700; padding:0 6px; border-radius:20px; line-height:16px; margin-left:4px; }
     
     .qr-sim-bar { background: #2c3e50; color: #ecf0f1; padding: 10px 16px; display: flex; align-items: center; gap: 12px; font-size: 13px; }
     .qr-input-wrap { display: flex; gap: 6px; flex: 1; max-width: 400px; }
@@ -51,61 +46,60 @@
     .qr-sim-bar button { background: #1abc9c; color: #fff; border: 0; padding: 6px 12px; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 12px; }
     .qr-sim-bar button:hover { background: #16a085; }
 
-    .subbar{display:flex;align-items:center;gap:14px;padding:12px 16px 4px;flex-wrap:wrap;}
-    .seg-toggle{display:flex;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:3px;}
-    .seg-t{display:flex;align-items:center;gap:6px;border:0;background:transparent;color:var(--ink2);
-      font-size:12.5px;font-weight:550;padding:6px 13px;border-radius:6px;cursor:pointer;transition:.12s;}
-    .seg-t:hover{color:var(--ink);}
-    .seg-t.on{background:var(--accent);color:#fff;}
-    .reg-search{display:flex;align-items:center;gap:9px;flex:1;min-width:200px;}
-    .reg-search input{width:100%; border:1px solid var(--line);background:var(--panel);border-radius:9px;
-      padding:10px 12px;font-size:14px;color:var(--ink);outline:none;transition:.12s;}
-    .reg-search input:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-bg);}
+    .subbar { display:flex; align-items:center; gap:14px; padding:12px 16px 4px; flex-wrap:wrap; }
+    .seg-toggle { display:flex; background:var(--panel2); border:1px solid var(--line); border-radius:8px; padding:3px; }
+    .seg-t { display:flex; align-items:center; gap:6px; border:0; background:transparent; color:var(--ink2);
+      font-size:12.5px; font-weight:550; padding:6px 13px; border-radius:6px; cursor:pointer; transition:.12s; }
+    .seg-t:hover { color:var(--ink); }
+    .seg-t.on { background:var(--accent); color:#fff; }
+    .reg-search { display:flex; align-items:center; gap:9px; flex:1; min-width:200px; }
+    .reg-search input { width:100%; border:1px solid var(--line); background:var(--panel); border-radius:9px;
+      padding:10px 12px; font-size:14px; color:var(--ink); outline:none; transition:.12s; }
+    .reg-search input:focus { border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-bg); }
     
-    .split{display:grid;grid-template-columns:1fr 1fr;border-top:1px solid var(--line);min-height:480px;}
-    .list{border-right:1px solid var(--line);overflow-y:auto;max-height:580px;background:var(--panel2);}
-    .row{display:block;width:100%;text-align:left;border:0;border-bottom:1px solid var(--line);background:var(--panel);padding:12px 16px;cursor:pointer;}
-    .row:hover{background:var(--panel2);}
-    .row.sel{background:var(--accent-bg);box-shadow:inset 3px 0 0 var(--accent);}
-    .row-main{display:flex;align-items:baseline;gap:10px;margin-bottom:5px;flex-wrap:wrap;}
-    .row-name{font-size:13.5px;font-weight:600;}
-    .tag{font-size:11px;font-weight:600;color:var(--accent);background:var(--accent-bg);padding:2px 6px;border-radius:5px;}
-    .chip{font-size:10.5px;font-weight:600;color:var(--ink2);background:var(--panel2);border:1px solid var(--line);padding:2px 7px;border-radius:20px;}
+    .split { display:grid; grid-template-columns:1fr 1fr; border-top:1px solid var(--line); min-height:480px; }
+    .list { border-right:1px solid var(--line); overflow-y:auto; max-height:580px; background:var(--panel2); }
+    .row { display:block; width:100%; text-align:left; border:0; border-bottom:1px solid var(--line); background:var(--panel); padding:12px 16px; cursor:pointer; }
+    .row:hover { background:var(--panel2); }
+    .row.sel { background:var(--accent-bg); box-shadow:inset 3px 0 0 var(--accent); }
+    .row-main { display:flex; align-items:baseline; gap:10px; margin-bottom:5px; flex-wrap:wrap; }
+    .row-name { font-size:13.5px; font-weight:600; }
+    .tag { font-size:11px; font-weight:600; color:var(--accent); background:var(--accent-bg); padding:2px 6px; border-radius:5px; }
     
-    .detail{overflow-y:auto;max-height:580px;background:var(--panel);}
-    .detail-empty{color:var(--ink2);font-size:13px;text-align:center;padding:64px 32px;display:flex;flex-direction:column;align-items:center;gap:12px;}
-    .dpanel{padding:20px;}
+    .detail { overflow-y:auto; max-height:580px; background:var(--panel); }
+    .detail-empty { color:var(--ink2); font-size:13px; text-align:center; padding:64px 32px; display:flex; flex-direction:column; align-items:center; gap:12px; }
+    .dpanel { padding:20px; }
     .phead { border-bottom: 1px solid var(--line); padding-bottom: 12px; margin-bottom: 16px; }
-    .phead-title{font-size:18px;font-weight:700;margin:0 0 4px 0;}
-    .phead-sub{font-size:12px;color:var(--ink2);margin:0;}
+    .phead-title { font-size:18px; font-weight:700; margin:0 0 4px 0; }
+    .phead-sub { font-size:12px; color:var(--ink2); margin:0; }
     
-    .dgrid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:20px;}
-    .field-l{font-size:11px;font-weight:600;text-transform:uppercase;color:var(--ink2);margin-bottom:2px;}
-    .field-v{font-size:14px;font-weight:550;}
+    .dgrid { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:20px;}
+    .field-l { font-size:11px; font-weight:600; text-transform:uppercase; color:var(--ink2); margin-bottom:2px; }
+    .field-v { font-size:14px; font-weight:550; }
     
     .stock-action-box { background: var(--panel2); border: 1px solid var(--line); padding: 12px; border-radius: 8px; margin-top: 16px; }
     .stock-inline-form { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
 
-    .two-col{display:grid;grid-template-columns:1fr 1fr;border-top:1px solid var(--line);}
-    .card{padding:20px;background:var(--panel);border-right:1px solid var(--line);}
-    .card-h{font-size:14px;font-weight:700;text-transform:uppercase;color:var(--ink2);margin-bottom:16px;display:flex;align-items:center;gap:6px;}
-    .fl{display:flex;flex-direction:column;gap:5px;font-size:11px;font-weight:600;text-transform:uppercase;color:var(--ink2);margin-bottom:14px;}
-    .fl select,.fl input,.fl textarea{font-family:inherit;font-size:13.5px;color:var(--ink);border:1px solid var(--line);background:var(--panel);border-radius:8px;padding:9px 11px;outline:none;}
+    .two-col { display:grid; grid-template-columns:1fr 1fr; border-top:1px solid var(--line); }
+    .card { padding:20px; background:var(--panel); border-right:1px solid var(--line); }
+    .card-h { font-size:14px; font-weight:700; text-transform:uppercase; color:var(--ink2); margin-bottom:16px; display:flex; align-items:center; gap:6px; }
+    .fl { display:flex; flex-direction:column; gap:5px; font-size:11px; font-weight:600; text-transform:uppercase; color:var(--ink2); margin-bottom:14px; }
+    .fl select, .fl input, .fl textarea { font-family:inherit; font-size:13.5px; color:var(--ink); border:1px solid var(--line); background:var(--panel); border-radius:8px; padding:9px 11px; outline:none; }
     
-    .btn-primary{display:inline-flex;align-items:center;gap:7px;background:var(--accent);color:#fff;border:0;border-radius:8px;padding:10px 16px;font-size:13px;font-weight:600;cursor:pointer;}
-    .btn-primary:hover{background:#12508f;}
-    .btn-sec{display:inline-flex;align-items:center;gap:7px;background:var(--panel2);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:8px 12px;font-size:12px;font-weight:600;cursor:pointer;}
+    .btn-primary { display:inline-flex; align-items:center; gap:7px; background:var(--accent); color:#fff; border:0; border-radius:8px; padding:10px 16px; font-size:13px; font-weight:600; cursor:pointer; }
+    .btn-primary:hover { background:#12508f; }
+    .btn-sec { display:inline-flex; align-items:center; gap:7px; background:var(--panel2); color:var(--ink); border:1px solid var(--line); border-radius:8px; padding:8px 12px; font-size:12px; font-weight:600; cursor:pointer; }
     
-    .col{padding:20px;background:var(--panel2);min-width:0;}
+    .col { padding:20px; background:var(--panel2); min-width:0; }
     .col-h { font-size:14px; font-weight:700; text-transform:uppercase; color:var(--ink2); margin-bottom:16px; }
-    .rcard{background:var(--panel);border:1px solid var(--line);border-left:4px solid orange;border-radius:8px;padding:12px;margin-bottom:10px;}
-    .rcard-name{font-size:13.5px;font-weight:600;}
-    .rcard-reason{font-size:12.5px;color:var(--ink);background:var(--panel2);border-radius:6px;padding:6px 10px;margin:6px 0;}
+    .rcard { background:var(--panel); border:1px solid var(--line); border-left:4px solid orange; border-radius:8px; padding:12px; margin-bottom:10px; }
+    .rcard-name { font-size:13.5px; font-weight:600; }
+    .rcard-reason { font-size:12.5px; color:var(--ink); background:var(--panel2); border-radius:6px; padding:6px 10px; margin:6px 0; }
     
-    .kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--line);border-bottom:1px solid var(--line);}
-    .kpi{background:var(--panel);padding:20px;text-align:left;}
-    .kpi-n{font-size:28px;font-weight:700;line-height:1;}
-    .kpi-l{font-size:11px;font-weight:600;color:var(--ink2);margin-top:6px;text-transform:uppercase;}
+    .kpis { display:grid; grid-template-columns:repeat(3,1fr); gap:1px; background:var(--line); border-bottom:1px solid var(--line); }
+    .kpi { background:var(--panel); padding:20px; text-align:left; }
+    .kpi-n { font-size:28px; font-weight:700; line-height:1; }
+    .kpi-l { font-size:11px; font-weight:600; color:var(--ink2); margin-top:6px; text-transform:uppercase; }
     
     .alert-banner { display: flex; align-items: center; gap: 8px; background: var(--bad-bg); color: var(--bad); padding: 10px; border-radius: 6px; font-size: 12.5px; font-weight: 600; margin-bottom: 12px; }
     .success-banner { background: var(--ok-bg); color: var(--ok); padding: 10px; border-radius: 6px; font-size: 13px; font-weight: 600; margin-bottom: 14px; }
@@ -142,7 +136,7 @@
         spareParts: "Spare Parts",
         filterPlaceholder: "Filter registry parameters...",
         clearFilter: "Clear Filter",
-        levelStockUnits: "Level Stock: {qty} units",
+        levelStockUnits: "Level Stock: ",
         systemId: "System ID",
         catClassification: "Category classification",
         modelId: "Model Identifier",
@@ -203,7 +197,7 @@
         spareParts: "គ្រឿងបន្លាស់",
         filterPlaceholder: "ចម្រោះទិន្នន័យស្វែងរក...",
         clearFilter: "សម្អាតការចម្រោះ",
-        levelStockUnits: "កម្រិតស្តុក៖ {qty} គ្រឿង",
+        levelStockUnits: "កម្រិតស្តុក៖ ",
         systemId: "អត្តសញ្ញាណប្រព័ន្ធ",
         catClassification: "ចំណាត់ថ្នាក់ប្រភេទ",
         modelId: "អត្តសញ្ញាណម៉ូដែល",
@@ -242,10 +236,82 @@
       }
     };
 
-    const Icon = ({ name, size = 16, className = "" }) => {
-      useEffect(() => { if (window.lucide) window.lucide.createIcons(); }, [name]);
-      return <i data-lucide={name} style={{ width: size, height: size, display:'inline-block' }} className={className}></i>;
-    };
+    function Icon({ name, size = 16, className = "" }) {
+      const styles = { width: size, height: size, display: 'inline-block', verticalAlign: 'middle', fill: 'none', stroke: 'currentColor', strokeWidth: 2, strokeLinecap: 'round', strokeLinejoin: 'round' };
+      let paths = null;
+      if (name === "layout-grid" || name === "gauge") {
+        paths = (
+          <g>
+            <rect x="3" y="3" width="7" height="9" />
+            <rect x="14" y="3" width="7" height="5" />
+            <rect x="14" y="12" width="7" height="9" />
+            <rect x="3" y="16" width="7" height="5" />
+          </g>
+        );
+      } else if (name === "search") {
+        paths = (
+          <g>
+            <circle cx="11" cy="11" r="8" />
+            <line x1="21" y1="21" x2="16.65" y2="16.65" />
+          </g>
+        );
+      } else if (name === "plus-circle") {
+        paths = (
+          <g>
+            <circle cx="12" cy="12" r="10" />
+            <line x1="12" y1="8" x2="12" y2="16" />
+            <line x1="8" y1="12" x2="16" y2="12" />
+          </g>
+        );
+      } else if (name === "send" || name === "edit-3") {
+        paths = <line x1="22" y1="2" x2="11" y2="13" />;
+      } else if (name === "qr-code") {
+        paths = (
+          <g>
+            <rect x="3" y="3" width="5" height="5" />
+            <rect x="16" y="3" width="5" height="5" />
+            <rect x="3" y="16" width="5" height="5" />
+            <path d="M21 16v5h-5" />
+          </g>
+        );
+      } else if (name === "alert-circle" || name === "alert-triangle") {
+        paths = (
+          <g>
+            <circle cx="12" cy="12" r="10" />
+            <line x1="12" y1="8" x2="12" y2="12" />
+            <line x1="12" y1="16" x2="12.01" y2="16" />
+          </g>
+        );
+      } else if (name === "check-circle") {
+        paths = (
+          <g>
+            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+            <polyline points="22 4 12 14.01 9 11.01" />
+          </g>
+        );
+      } else if (name === "factory") {
+        paths = <path d="M2 20V10l5 3V10l5 3V10l10 5v5H2z" />;
+      } else if (name === "boxes") {
+        paths = <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />;
+      } else if (name === "map-pin") {
+        paths = (
+          <g>
+            <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+            <circle cx="12" cy="10" r="3" />
+          </g>
+        );
+      } else if (name === "chevron-right") {
+        paths = <polyline points="9 18 15 12 9 6" />;
+      } else if (name === "save") {
+        paths = <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />;
+      }
+
+      return (
+        <svg viewBox="0 0 24 24" style={styles} className={className}>
+          {paths}
+        </svg>
+      );
+    }
 
     const INITIAL_MACHINES = [
       { id: "PAC-M-0031", name: "Juki Single Needle Lockstitch", type: "Machine", model: "DDL-8700N", location: "Line 3", status: "Active" },
@@ -287,9 +353,9 @@
 
         if (foundMachine || foundPart) {
           navigateToRegistry(code);
-          setQrNotice(`${t.scanSuccess}${code}`);
+          setQrNotice(t.scanSuccess + code);
         } else {
-          setQrNotice(`${t.scanFail}"${code}"`);
+          setQrNotice(t.scanFail + '"' + code + '"');
         }
         setTimeout(() => setQrNotice(""), 4000);
       };
@@ -307,22 +373,22 @@
             
             <div className="fia-right-controls">
               <div className="lang-toggle">
-                <button className={`lang-btn ${lang === 'en' ? 'on' : ''}`} onClick={() => setLang("en")}>EN</button>
-                <button className={`lang-btn ${lang === 'kh' ? 'on' : ''}`} onClick={() => setLang("kh")}>ខ្មែរ</button>
+                <button className={"lang-btn " + (lang === 'en' ? 'on' : '')} onClick={() => setLang("en")}>EN</button>
+                <button className={"lang-btn " + (lang === 'kh' ? 'on' : '')} onClick={() => setLang("kh")}>ខ្មែរ</button>
               </div>
 
               <nav className="fia-nav">
-                <button className={`fia-tab ${view === 'dashboard' ? 'on' : ''}`} onClick={() => setView('dashboard')}>
+                <button className={"fia-tab " + (view === 'dashboard' ? 'on' : '')} onClick={() => setView('dashboard')}>
                   <Icon name="gauge" size={14} /> {t.dashboard}
                   {lowStockCount > 0 && <span className="fia-badge">{lowStockCount}</span>}
                 </button>
-                <button className={`fia-tab ${view === 'registry' ? 'on' : ''}`} onClick={() => setView('registry')}>
+                <button className={"fia-tab " + (view === 'registry' ? 'on' : '')} onClick={() => setView('registry')}>
                   <Icon name="search" size={14} /> {t.registry}
                 </button>
-                <button className={`fia-tab ${view === 'add-item' ? 'on' : ''}`} onClick={() => setView('add-item')}>
+                <button className={"fia-tab " + (view === 'add-item' ? 'on' : '')} onClick={() => setView('add-item')}>
                   <Icon name="plus-circle" size={14} /> {t.addItem}
                 </button>
-                <button className={`fia-tab ${view === 'requests' ? 'on' : ''}`} onClick={() => setView('requests')}>
+                <button className={"fia-tab " + (view === 'requests' ? 'on' : '')} onClick={() => setView('requests')}>
                   <Icon name="send" size={14} /> {t.drawRequests}
                 </button>
               </nav>
@@ -365,7 +431,7 @@
           
           <div style={{padding: '24px'}}>
             <h3 style={{margin: '0 0 16px 0', fontSize: '15px', display: 'flex', alignItems: 'center', gap: '8px'}}>
-              <Icon name="alert-circle" size={18} className={lowStock.length > 0 ? "bad" : "ok"} /> 
+              <Icon name="alert-circle" size={18} /> 
               {t.procurementTitle}
             </h3>
             
@@ -386,7 +452,7 @@
                       {t.currentStock}: {p.stock} ({t.guardLevel}: {p.minStock})
                     </div>
                   </div>
-                  <div style={{fontSize: '12px', color: 'var(--ink2)'}}>{t.bin}: {p.bin} <Icon name="chevron-right" size={14} style={{verticalAlign:'middle'}}/></div>
+                  <div style={{fontSize: '12px', color: 'var(--ink2)'}}>{t.bin}: {p.bin} <Icon name="chevron-right" size={14} /></div>
                 </button>
               ))}
             </div>
@@ -427,8 +493,8 @@
         <>
           <div className="subbar">
             <div className="seg-toggle">
-              <button className={`seg-t ${mode === "machines" ? "on" : ""}`} onClick={() => { setMode("machines"); setSelected(null); }}><Icon name="factory" size={13} /> {t.machines}</button>
-              <button className={`seg-t ${mode === "parts" ? "on" : ""}`} onClick={() => { setMode("parts"); setSelected(null); }}><Icon name="boxes" size={13} /> {t.spareParts}</button>
+              <button className={"seg-t " + (mode === "machines" ? "on" : "")} onClick={() => { setMode("machines"); setSelected(null); }}><Icon name="factory" size={13} /> {t.machines}</button>
+              <button className={"seg-t " + (mode === "parts" ? "on" : "")} onClick={() => { setMode("parts"); setSelected(null); }}><Icon name="boxes" size={13} /> {t.spareParts}</button>
             </div>
             <div className="reg-search">
               <input value={filterValue} onChange={e => setFilterValue(e.target.value)} placeholder={t.filterPlaceholder} />
@@ -439,7 +505,7 @@
           <div className="split">
             <div className="list">
               {items.map(x => (
-                <button key={x.id} className={`row ${selected?.id === x.id ? "sel" : ""}`} onClick={() => setSelected(x)}>
+                <button key={x.id} className={"row " + (selected && selected.id === x.id ? "sel" : "")} onClick={() => setSelected(x)}>
                   <div className="row-main">
                     <span className="mono tag">{x.id}</span>
                     <span className="row-name">{x.name}</span>
@@ -448,7 +514,7 @@
                   {x.stock !== undefined && (
                     <div style={{marginTop: '6px'}}>
                       <span style={{fontSize:'11px', padding:'2px 8px', borderRadius:'12px', fontWeight: '600', background: x.stock <= x.minStock ? '#fbe9e7' : '#e3f2ea', color: x.stock <= x.minStock ? '#c0392b' : '#1f7a4d'}}>
-                        {t.levelStockUnits.replace("{qty}", x.stock)}
+                        {t.levelStockUnits + x.stock + " units"}
                       </span>
                     </div>
                   )}
@@ -541,11 +607,11 @@
           <div style={{maxWidth: '600px', margin: '0 auto'}}>
             <h2>{t.formTitle}</h2>
             
-            {msg && <div className={msg.includes("Error") || msg.includes("កំហុស") ? "alert-banner" : "success-banner"}>{msg}</div>}
+            {msg && <div className={msg.indexOf("Error") !== -1 || msg.indexOf("កំហុស") !== -1 ? "alert-banner" : "success-banner"}>{msg}</div>}
 
             <div className="seg-toggle" style={{marginBottom: '20px', width: 'fit-content'}}>
-              <button type="button" className={`seg-t ${formType === 'machine' ? 'on' : ''}`} onClick={() => setFormType("machine")}>{t.formMachineTab}</button>
-              <button type="button" className={`seg-t ${formType === 'part' ? 'on' : ''}`} onClick={() => setFormType("part")}>{t.formPartTab}</button>
+              <button type="button" className={"seg-t " + (formType === 'machine' ? 'on' : '')} onClick={() => setFormType("machine")}>{t.formMachineTab}</button>
+              <button type="button" className={"seg-t " + (formType === 'part' ? 'on' : '')} onClick={() => setFormType("part")}>{t.formPartTab}</button>
             </div>
 
             <form onSubmit={handleCreate}>

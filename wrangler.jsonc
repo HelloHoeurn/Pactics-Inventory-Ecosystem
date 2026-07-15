@@ -1,0 +1,10 @@
+{
+  // Cloudflare Workers static-site config (this is a *.workers.dev deploy).
+  // Serves the built Vite SPA from ./dist with client-side routing fallback.
+  "name": "pactics-inventory-ecosystem",
+  "compatibility_date": "2025-06-01",
+  "assets": {
+    "directory": "./dist",
+    "not_found_handling": "single-page-application"
+  }
+}

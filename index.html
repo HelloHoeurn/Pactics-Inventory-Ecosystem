@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Pactics Factory Inventory</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script>
+      (function () {
+        function show(msg) {
+          var r = document.getElementById('root')
+          if (r && !r.hasChildNodes()) {
+            r.innerHTML =
+              '<pre style="margin:0;padding:24px;color:#c0392b;background:#fff;' +
+              'font-family:ui-monospace,Menlo,monospace;font-size:13px;white-space:pre-wrap;line-height:1.5">' +
+              'Startup error — the app script failed to load:\n\n' + msg +
+              '\n\nOpen the browser console (F12) for details.</pre>'
+          }
+        }
+        window.addEventListener('error', function (e) { show((e && (e.message || e.error)) || 'Unknown error') })
+        window.addEventListener('unhandledrejection', function (e) {
+          show((e && e.reason && (e.reason.message || e.reason)) || 'Unhandled promise rejection')
+        })
+      })()
+    </script>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>

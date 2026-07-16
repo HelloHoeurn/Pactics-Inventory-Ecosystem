@@ -13,14 +13,27 @@ export default function Login({ t, onAuthed }) {
     e.preventDefault()
     setErr('')
     setBusy(true)
-    const res =
-      mode === 'signin'
-        ? await client.auth.signIn.email({ email, password })
-        : await client.auth.signUp.email({ email, password, name: name || email })
-    setBusy(false)
-    if (res.error) { setErr(res.error.message); return }
-    // session is created automatically; reload it in App
-    await onAuthed()
+    try {
+      // Neon Auth (Better Auth) can EITHER return { error } OR throw — handle both.
+      const res =
+        mode === 'signin'
+          ? await client.auth.signIn.email({ email, password })
+          : await client.auth.signUp.email({ email, password, name: name || email })
+
+      if (res?.error) {
+        setErr(res.error.message || String(res.error))
+        return
+      }
+      // success — reload the session in App (which re-renders to the app)
+      await onAuthed()
+    } catch (e2) {
+      // This is what was hanging the button: a thrown/rejected auth call.
+      // Now it shows the real reason (e.g. "Email not verified" / bad password).
+      console.error('Sign-in/up failed:', e2)
+      setErr(e2?.message || String(e2) || 'Authentication failed. Please try again.')
+    } finally {
+      setBusy(false) // ALWAYS re-enable the button, success or failure
+    }
   }
 
   return (

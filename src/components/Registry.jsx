@@ -1,5 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
-import { Factory, Boxes, MapPin, AlertTriangle, Download, QrCode } from 'lucide-react'
+import { createPortal } from 'react-dom'
+import { Factory, Boxes, MapPin, AlertTriangle, Download, QrCode, Printer, X } from 'lucide-react'
+import { QRCodeSVG } from 'qrcode.react'
 import { client } from '../neonClient'
 import { exportCSV } from '../lib/csv'
 
@@ -9,6 +11,21 @@ export default function Registry({ t, machines, parts, filter, setFilter, refres
   const [adj, setAdj] = useState('')
   const [busy, setBusy] = useState(false)
 
+  // (1) multi-select for QR printing — id -> {id,name,model}. Persists across
+  // the Machines/Parts toggle so you can print a mixed batch.
+  const [checked, setChecked] = useState({})
+  const checkedList = Object.values(checked)
+
+  const toggleCheck = (item) =>
+    setChecked((prev) => {
+      const next = { ...prev }
+      if (next[item.id]) delete next[item.id]
+      else next[item.id] = { id: item.id, name: item.name, model: item.model }
+      return next
+    })
+  const clearChecked = () => setChecked({})
+  const printLabels = () => window.print()
+
   useEffect(() => {
     if (!filter) return
     const m = machines.find((x) => x.id.toLowerCase() === filter.toLowerCase())
@@ -17,7 +34,6 @@ export default function Registry({ t, machines, parts, filter, setFilter, refres
     else if (p) { setMode('parts'); setSelected(p) }
   }, [filter, machines, parts])
 
-  // keep the selected panel in sync after a refresh
   useEffect(() => {
     if (!selected) return
     const pool = mode === 'machines' ? machines : parts
@@ -30,6 +46,15 @@ export default function Registry({ t, machines, parts, filter, setFilter, refres
     const f = filter.toLowerCase()
     return pool.filter((x) => !f || x.id.toLowerCase().includes(f) || x.name.toLowerCase().includes(f))
   }, [mode, machines, parts, filter])
+
+  const allVisibleChecked = items.length > 0 && items.every((x) => checked[x.id])
+  const toggleAllVisible = () =>
+    setChecked((prev) => {
+      const next = { ...prev }
+      if (allVisibleChecked) items.forEach((x) => delete next[x.id])
+      else items.forEach((x) => { next[x.id] = { id: x.id, name: x.name, model: x.model } })
+      return next
+    })
 
   const adjustStock = async () => {
     const amt = parseInt(adj)
@@ -68,25 +93,47 @@ export default function Registry({ t, machines, parts, filter, setFilter, refres
         </div>
         {filter && <button className="btn-sec" onClick={() => { setFilter(''); setSelected(null) }}>{t.clearFilter}</button>}
         <button className="btn-sec" onClick={exportView} disabled={items.length === 0}><Download size={14} /> {t.exportView}</button>
+        <label className="btn-sec" style={{ cursor: 'pointer' }}>
+          <input type="checkbox" checked={allVisibleChecked} onChange={toggleAllVisible} style={{ marginRight: 6 }} />
+          {t.selectAll || 'Select all'}
+        </label>
       </div>
+
+      {/* (2) print action bar — only when something is selected */}
+      {checkedList.length > 0 && (
+        <div className="print-bar">
+          <span><strong>{checkedList.length}</strong> {t.selectedCount || 'selected'}</span>
+          <button className="btn-primary" onClick={printLabels}><Printer size={14} /> {t.printQr || 'Print Selected QR Codes'}</button>
+          <button className="btn-sec" onClick={clearChecked}><X size={13} /> {t.clearSel || 'Clear'}</button>
+        </div>
+      )}
 
       <div className="split">
         <div className="list">
           {items.map((x) => (
-            <button key={x.id} className={`row ${selected?.id === x.id ? 'sel' : ''}`} onClick={() => setSelected(x)}>
-              <div className="row-main">
-                <span className="mono tag">{x.id}</span>
-                <span className="row-name">{x.name}</span>
-              </div>
-              <div style={{ fontSize: 11, color: 'gray' }}>{t.modelId}: {x.model}</div>
-              {x.stock !== undefined && x.stock !== null && (
-                <div style={{ marginTop: 6 }}>
-                  <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 12, fontWeight: 600, background: x.stock <= x.min_stock ? '#fbe9e7' : '#e3f2ea', color: x.stock <= x.min_stock ? '#c0392b' : '#1f7a4d' }}>
-                    {t.levelStockUnits.replace('{qty}', x.stock)}
-                  </span>
+            <div key={x.id} className={`row-wrap ${checked[x.id] ? 'checked' : ''}`}>
+              <input
+                type="checkbox"
+                className="row-check"
+                checked={!!checked[x.id]}
+                onChange={() => toggleCheck(x)}
+                aria-label={`Select ${x.id}`}
+              />
+              <button className={`row ${selected?.id === x.id ? 'sel' : ''}`} onClick={() => setSelected(x)}>
+                <div className="row-main">
+                  <span className="mono tag">{x.id}</span>
+                  <span className="row-name">{x.name}</span>
                 </div>
-              )}
-            </button>
+                <div style={{ fontSize: 11, color: 'gray' }}>{t.modelId}: {x.model}</div>
+                {x.stock !== undefined && x.stock !== null && (
+                  <div style={{ marginTop: 6 }}>
+                    <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 12, fontWeight: 600, background: x.stock <= x.min_stock ? '#fbe9e7' : '#e3f2ea', color: x.stock <= x.min_stock ? '#c0392b' : '#1f7a4d' }}>
+                      {t.levelStockUnits.replace('{qty}', x.stock)}
+                    </span>
+                  </div>
+                )}
+              </button>
+            </div>
           ))}
         </div>
 
@@ -126,6 +173,22 @@ export default function Registry({ t, machines, parts, filter, setFilter, refres
           )}
         </div>
       </div>
+
+      {/* (3)+(4) print-only label sheet, portaled to <body> so hiding the app
+          (#root) in print doesn't hide it. Uses qrcode.react for real QR codes. */}
+      {createPortal(
+        <div className="print-area">
+          {checkedList.map((it) => (
+            <div className="label-card" key={it.id}>
+              <QRCodeSVG value={String(it.id)} size={128} level="M" />
+              <div className="label-id">{it.id}</div>
+              <div className="label-name">{it.name}</div>
+              <div className="label-model">{t.modelId}: {it.model || '—'}</div>
+            </div>
+          ))}
+        </div>,
+        document.body
+      )}
     </>
   )
 }

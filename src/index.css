@@ -131,3 +131,37 @@ body { background:#e7eaee; padding:20px; margin:0;
 .login-wrap button{width:100%;background:var(--accent);color:#fff;border:0;border-radius:8px;padding:11px;font-size:14px;font-weight:600;cursor:pointer;}
 .login-err{background:var(--bad-bg);color:var(--bad);font-size:12.5px;padding:9px 11px;border-radius:6px;margin-bottom:14px;}
 .center-note{padding:60px 20px;text-align:center;color:var(--ink2);font-size:14px;}
+
+/* ---- multi-select QR label printing ---- */
+.row-wrap { display:flex; align-items:stretch; border-bottom:1px solid var(--line); background:var(--panel); }
+.row-wrap.checked { background: var(--accent-bg); }
+.row-wrap .row { flex:1; border-bottom:0; background:transparent; }
+.row-check { align-self:center; margin:0 6px 0 16px; width:16px; height:16px; cursor:pointer; accent-color: var(--accent); flex:none; }
+.print-bar { display:flex; align-items:center; gap:12px; padding:10px 16px; background:var(--accent-bg); border-bottom:1px solid var(--line); font-size:13px; }
+
+/* on screen the label sheet is hidden; it only appears when printing */
+.print-area { display:none; }
+
+@media print {
+  @page { margin: 10mm; }
+  html, body { background:#fff !important; }
+  #root { display: none !important; }            /* hide the entire app UI */
+  .print-area {
+    display: grid !important;
+    grid-template-columns: repeat(2, 1fr);       /* two columns of labels */
+    gap: 6mm;
+    padding: 0;
+  }
+  .label-card {
+    break-inside: avoid;
+    border: 1px solid #000;
+    border-radius: 3mm;
+    padding: 4mm;
+    display: flex; flex-direction: column; align-items: center; gap: 2mm;
+    text-align: center;
+  }
+  .label-card svg { width: 32mm; height: 32mm; }
+  .label-id    { font-family: ui-monospace, monospace; font-weight: 700; font-size: 12pt; letter-spacing: .5px; }
+  .label-name  { font-size: 10pt; font-weight: 600; }
+  .label-model { font-size: 8pt; color: #333; }
+}

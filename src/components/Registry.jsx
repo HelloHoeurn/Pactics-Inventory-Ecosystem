@@ -11,18 +11,29 @@ export default function Registry({ t, machines, parts, filter, setFilter, refres
   const [adj, setAdj] = useState('')
   const [busy, setBusy] = useState(false)
 
-  // (1) multi-select for QR printing — id -> {id,name,model}. Persists across
-  // the Machines/Parts toggle so you can print a mixed batch.
+  // (2) multi-select for QR printing — id -> {id,name,model,qty}.
+  // Tracks WHICH items are selected AND HOW MANY copies of each to print.
+  // Persists across the Machines/Parts toggle so you can print a mixed batch.
   const [checked, setChecked] = useState({})
   const checkedList = Object.values(checked)
+  // total labels that will actually be printed (sum of all quantities)
+  const totalLabels = checkedList.reduce((n, it) => n + (it.qty || 1), 0)
 
   const toggleCheck = (item) =>
     setChecked((prev) => {
       const next = { ...prev }
       if (next[item.id]) delete next[item.id]
-      else next[item.id] = { id: item.id, name: item.name, model: item.model }
+      // qty defaults to 1 when an item is checked
+      else next[item.id] = { id: item.id, name: item.name, model: item.model, qty: 1 }
       return next
     })
+
+  // change the number of copies for one item (1–100)
+  const setQty = (id, raw) => {
+    const qty = Math.max(1, Math.min(100, parseInt(raw) || 1))
+    setChecked((prev) => (prev[id] ? { ...prev, [id]: { ...prev[id], qty } } : prev))
+  }
+
   const clearChecked = () => setChecked({})
   const printLabels = () => window.print()
 
@@ -52,7 +63,7 @@ export default function Registry({ t, machines, parts, filter, setFilter, refres
     setChecked((prev) => {
       const next = { ...prev }
       if (allVisibleChecked) items.forEach((x) => delete next[x.id])
-      else items.forEach((x) => { next[x.id] = { id: x.id, name: x.name, model: x.model } })
+      else items.forEach((x) => { next[x.id] = next[x.id] || { id: x.id, name: x.name, model: x.model, qty: 1 } })
       return next
     })
 
@@ -102,7 +113,12 @@ export default function Registry({ t, machines, parts, filter, setFilter, refres
       {/* (2) print action bar — only when something is selected */}
       {checkedList.length > 0 && (
         <div className="print-bar">
-          <span><strong>{checkedList.length}</strong> {t.selectedCount || 'selected'}</span>
+          <span>
+            <strong>{checkedList.length}</strong> {t.selectedCount || 'selected'}
+            {totalLabels !== checkedList.length && (
+              <> · <strong>{totalLabels}</strong> {t.labelsTotal || 'labels'}</>
+            )}
+          </span>
           <button className="btn-primary" onClick={printLabels}><Printer size={14} /> {t.printQr || 'Print Selected QR Codes'}</button>
           <button className="btn-sec" onClick={clearChecked}><X size={13} /> {t.clearSel || 'Clear'}</button>
         </div>
@@ -112,13 +128,29 @@ export default function Registry({ t, machines, parts, filter, setFilter, refres
         <div className="list">
           {items.map((x) => (
             <div key={x.id} className={`row-wrap ${checked[x.id] ? 'checked' : ''}`}>
-              <input
-                type="checkbox"
-                className="row-check"
-                checked={!!checked[x.id]}
-                onChange={() => toggleCheck(x)}
-                aria-label={`Select ${x.id}`}
-              />
+              <div className="row-select">
+                <input
+                  type="checkbox"
+                  className="row-check"
+                  checked={!!checked[x.id]}
+                  onChange={() => toggleCheck(x)}
+                  aria-label={`Select ${x.id}`}
+                />
+                {/* (1) copies to print — only shown once the item is checked */}
+                {checked[x.id] && (
+                  <input
+                    type="number"
+                    className="row-qty"
+                    min="1"
+                    max="100"
+                    value={checked[x.id].qty}
+                    onChange={(e) => setQty(x.id, e.target.value)}
+                    onClick={(e) => e.stopPropagation()}
+                    title={t.copies || 'Copies to print'}
+                    aria-label={`Copies of ${x.id}`}
+                  />
+                )}
+              </div>
               <button className={`row ${selected?.id === x.id ? 'sel' : ''}`} onClick={() => setSelected(x)}>
                 <div className="row-main">
                   <span className="mono tag">{x.id}</span>
@@ -178,14 +210,18 @@ export default function Registry({ t, machines, parts, filter, setFilter, refres
           (#root) in print doesn't hide it. Uses qrcode.react for real QR codes. */}
       {createPortal(
         <div className="print-area">
-          {checkedList.map((it) => (
-            <div className="label-card" key={it.id}>
-              <QRCodeSVG value={String(it.id)} size={128} level="M" />
-              <div className="label-id">{it.id}</div>
-              <div className="label-name">{it.name}</div>
-              <div className="label-model">{t.modelId}: {it.model || '—'}</div>
-            </div>
-          ))}
+          {checkedList.flatMap((it) =>
+            // render this item's label `qty` times so a batch of identical
+            // stickers fills the sheet instead of wasting one page each
+            Array.from({ length: it.qty || 1 }, (_, i) => (
+              <div className="label-card" key={`${it.id}-${i}`}>
+                <QRCodeSVG value={String(it.id)} size={128} level="M" />
+                <div className="label-id">{it.id}</div>
+                <div className="label-name">{it.name}</div>
+                <div className="label-model">{t.modelId}: {it.model || '—'}</div>
+              </div>
+            ))
+          )}
         </div>,
         document.body
       )}

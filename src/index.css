@@ -146,21 +146,26 @@ body { background:#e7eaee; padding:20px; margin:0;
   @page { margin: 10mm; }
   html, body { background:#fff !important; }
   #root { display: none !important; }            /* hide the entire app UI */
+  /* flex-wrap lets duplicate labels flow side-by-side and pack each sheet
+     as densely as possible instead of one label per row */
   .print-area {
-    display: grid !important;
-    grid-template-columns: repeat(2, 1fr);       /* two columns of labels */
-    gap: 6mm;
+    display: flex !important;
+    flex-wrap: wrap;
+    align-content: flex-start;
+    gap: 4mm;
     padding: 0;
   }
   .label-card {
     break-inside: avoid;
+    flex: 0 0 auto;
+    width: 45mm;                 /* sticker width — tune to your label sheet */
     border: 1px solid #000;
     border-radius: 3mm;
-    padding: 4mm;
-    display: flex; flex-direction: column; align-items: center; gap: 2mm;
+    padding: 3mm;
+    display: flex; flex-direction: column; align-items: center; gap: 1.5mm;
     text-align: center;
   }
-  .label-card svg { width: 32mm; height: 32mm; }
+  .label-card svg { width: 28mm; height: 28mm; }
   .label-id    { font-family: ui-monospace, monospace; font-weight: 700; font-size: 12pt; letter-spacing: .5px; }
   .label-name  { font-size: 10pt; font-weight: 600; }
   .label-model { font-size: 8pt; color: #333; }
@@ -182,3 +187,8 @@ body { background:#e7eaee; padding:20px; margin:0;
 .scan-ic { color:var(--accent); flex:none; }
 .scan-clear { border:0; background:transparent; color:var(--ink2); cursor:pointer; display:grid; place-items:center; padding:4px; border-radius:6px; }
 .scan-clear:hover { color:var(--ink); background:var(--panel2); }
+
+/* qty input beside each row checkbox */
+.row-select { display:flex; flex-direction:column; align-items:center; gap:4px; justify-content:center; margin:0 6px 0 12px; flex:none; }
+.row-qty { width:46px; padding:3px 4px; font-size:11.5px; text-align:center; border:1px solid var(--line); border-radius:5px; color:var(--ink); background:var(--panel); }
+.row-qty:focus { outline:none; border-color:var(--accent); box-shadow:0 0 0 2px var(--accent-bg); }

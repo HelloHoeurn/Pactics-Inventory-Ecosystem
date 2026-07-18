@@ -1,10 +1,16 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Edit3, CheckCircle, UserCheck, ScanLine, X, Package } from 'lucide-react'
 import { client } from '../neonClient'
 
 export default function DrawRequests({ t, parts, draws, refresh }) {
   const [reason, setReason] = useState('')
   const [busy, setBusy] = useState(false)
+
+  // Refs for the continuous-scan workflow: hardware scanners fire "Enter" at the
+  // end of a scan, so each Enter advances focus to the next field automatically.
+  const partInputRef = useRef(null)
+  const operatorInputRef = useRef(null)
+  const reasonRef = useRef(null)
 
   // logged-in user (records who AUTHORIZED the draw)
   const [user, setUser] = useState(null)
@@ -49,9 +55,10 @@ export default function DrawRequests({ t, parts, draws, refresh }) {
       .eq('employee_id', id)
       .limit(1)
     setLooking(false)
-    if (error) { setLookupErr(error.message); return }
-    if (!data || data.length === 0) { setLookupErr((t.operatorNotFound || 'No operator found for ID') + ` "${id}".`); return }
+    if (error) { setLookupErr(error.message); return false }
+    if (!data || data.length === 0) { setLookupErr((t.operatorNotFound || 'No operator found for ID') + ` "${id}".`); return false }
     setOperator(data[0])
+    return true
   }
   useEffect(() => {
     if (!idInput.trim()) { setOperator(null); setLookupErr(''); return }
@@ -59,6 +66,36 @@ export default function DrawRequests({ t, parts, draws, refresh }) {
     return () => clearTimeout(h)
   }, [idInput]) // eslint-disable-line
   const clearOperator = () => { setIdInput(''); setOperator(null); setLookupErr('') }
+
+  // --- continuous scanning: Enter advances to the next field ---
+  // A hardware scanner types the value then sends Enter. We stop that Enter from
+  // submitting the form, run the lookup, and move focus to the next input.
+  const handlePartKeyDown = (e) => {
+    if (e.key !== 'Enter') return
+    e.preventDefault()                 // (2) never let Enter submit the form here
+    const id = partInput.trim()
+    if (!id) return
+    const hit = parts.find((p) => String(p.id).toLowerCase() === id.toLowerCase())
+    if (hit) {
+      setPart(hit); setPartErr('')
+      operatorInputRef.current?.focus()   // (3) jump straight to the badge field
+      operatorInputRef.current?.select()
+    } else {
+      setPart(null)
+      setPartErr((t.partNotFound || 'No part found for ID') + ` "${id}".`)
+      partInputRef.current?.select()     // bad scan: keep focus here to re-scan
+    }
+  }
+
+  const handleOperatorKeyDown = async (e) => {
+    if (e.key !== 'Enter') return
+    e.preventDefault()
+    const id = idInput.trim()
+    if (!id) return
+    const found = await lookup(id)
+    if (found) reasonRef.current?.focus()     // continue on to the reason box
+    else operatorInputRef.current?.select()   // bad badge: re-scan in place
+  }
 
   const submit = async (e) => {
     e.preventDefault()
@@ -77,6 +114,7 @@ export default function DrawRequests({ t, parts, draws, refresh }) {
     setBusy(false)
     if (error) { alert(error.message.includes('INSUFFICIENT_STOCK') ? t.drawError : error.message); return }
     setReason(''); clearPart(); clearOperator()
+    partInputRef.current?.focus()   // ready for the next scan cycle
     await refresh()
   }
 
@@ -91,10 +129,11 @@ export default function DrawRequests({ t, parts, draws, refresh }) {
             <div className="scan-row">
               <ScanLine size={16} className="scan-ic" />
               <input
+                ref={partInputRef}
                 type="text"
                 value={partInput}
                 onChange={(e) => setPartInput(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); findPart(partInput) } }}
+                onKeyDown={handlePartKeyDown}
                 placeholder={t.scanPartPlaceholder || 'Scan or type part ID (e.g. BC-8700)…'}
                 autoComplete="off"
                 autoFocus
@@ -125,10 +164,11 @@ export default function DrawRequests({ t, parts, draws, refresh }) {
             <div className="scan-row">
               <ScanLine size={16} className="scan-ic" />
               <input
+                ref={operatorInputRef}
                 type="text"
                 value={idInput}
                 onChange={(e) => setIdInput(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); lookup(idInput) } }}
+                onKeyDown={handleOperatorKeyDown}
                 placeholder={t.scanOperatorPlaceholder || 'Scan badge or type ID…'}
                 autoComplete="off"
               />
@@ -156,7 +196,7 @@ export default function DrawRequests({ t, parts, draws, refresh }) {
           )}
 
           <label className="fl">{t.drawReason}
-            <textarea rows="4" placeholder={t.drawReasonPlaceholder} value={reason} onChange={(e) => setReason(e.target.value)} />
+            <textarea ref={reasonRef} rows="4" placeholder={t.drawReasonPlaceholder} value={reason} onChange={(e) => setReason(e.target.value)} />
           </label>
 
           <button type="submit" className="btn-primary" disabled={busy || !part || !operator}>

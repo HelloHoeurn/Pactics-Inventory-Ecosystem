@@ -1,9 +1,8 @@
 import { useState, useEffect } from 'react'
-import { Edit3, CheckCircle, UserCheck, ScanLine, X } from 'lucide-react'
+import { Edit3, CheckCircle, UserCheck, ScanLine, X, Package } from 'lucide-react'
 import { client } from '../neonClient'
 
 export default function DrawRequests({ t, parts, draws, refresh }) {
-  const [partId, setPartId] = useState('')
   const [reason, setReason] = useState('')
   const [busy, setBusy] = useState(false)
 
@@ -15,9 +14,28 @@ export default function DrawRequests({ t, parts, draws, refresh }) {
       .catch((e) => console.error('Could not read current user:', e))
   }, [])
 
-  // ---- operator/mechanic scan + lookup ----
+  // ---- PART scan + lookup (matches the operator field) ----
+  const [partInput, setPartInput] = useState('')
+  const [part, setPart] = useState(null)
+  const [partErr, setPartErr] = useState('')
+
+  const findPart = (raw) => {
+    const id = String(raw ?? partInput).trim()
+    if (!id) { setPart(null); setPartErr(''); return }
+    const hit = parts.find((p) => String(p.id).toLowerCase() === id.toLowerCase())
+    if (!hit) { setPart(null); setPartErr((t.partNotFound || 'No part found for ID') + ` "${id}".`); return }
+    setPart(hit); setPartErr('')
+  }
+  useEffect(() => {
+    if (!partInput.trim()) { setPart(null); setPartErr(''); return }
+    const h = setTimeout(() => findPart(partInput), 250)
+    return () => clearTimeout(h)
+  }, [partInput, parts]) // eslint-disable-line
+  const clearPart = () => { setPartInput(''); setPart(null); setPartErr('') }
+
+  // ---- OPERATOR scan + lookup ----
   const [idInput, setIdInput] = useState('')
-  const [operator, setOperator] = useState(null) // the looked-up employee
+  const [operator, setOperator] = useState(null)
   const [looking, setLooking] = useState(false)
   const [lookupErr, setLookupErr] = useState('')
 
@@ -32,38 +50,33 @@ export default function DrawRequests({ t, parts, draws, refresh }) {
       .limit(1)
     setLooking(false)
     if (error) { setLookupErr(error.message); return }
-    if (!data || data.length === 0) {
-      setLookupErr((t.operatorNotFound || 'No operator found for ID') + ` "${id}".`)
-      return
-    }
+    if (!data || data.length === 0) { setLookupErr((t.operatorNotFound || 'No operator found for ID') + ` "${id}".`); return }
     setOperator(data[0])
   }
-
-  // auto-look-up shortly after a scan/typing stops (a scanner types fast, then Enter)
   useEffect(() => {
     if (!idInput.trim()) { setOperator(null); setLookupErr(''); return }
     const h = setTimeout(() => lookup(idInput), 350)
     return () => clearTimeout(h)
   }, [idInput]) // eslint-disable-line
-
   const clearOperator = () => { setIdInput(''); setOperator(null); setLookupErr('') }
 
   const submit = async (e) => {
     e.preventDefault()
-    if (!partId || !reason) return
+    if (!part) { alert(t.scanPartFirst || 'Please scan or enter a valid part ID first.'); return }
+    if (!reason) return
     if (!operator) { alert(t.scanOperatorFirst || 'Please scan or enter the operator / mechanic ID first.'); return }
     setBusy(true)
     const { error } = await client.rpc('draw_part', {
-      p_part_id: partId,
+      p_part_id: part.id,                    // scanned part
       p_reason: reason,
-      p_operator_name: operator.name_en,     // scanned operator name  -> mechanic
-      p_operator_id: operator.employee_id,   // scanned Employee ID     -> operator_id
-      p_authorized_by: user?.id ?? null,     // signed-in user          -> authorized_by
+      p_operator_name: operator.name_en,     // scanned operator
+      p_operator_id: operator.employee_id,
+      p_authorized_by: user?.id ?? null,
       p_qty: 1,
     })
     setBusy(false)
     if (error) { alert(error.message.includes('INSUFFICIENT_STOCK') ? t.drawError : error.message); return }
-    setReason(''); clearOperator()
+    setReason(''); clearPart(); clearOperator()
     await refresh()
   }
 
@@ -72,14 +85,42 @@ export default function DrawRequests({ t, parts, draws, refresh }) {
       <div className="card">
         <div className="card-h"><Edit3 size={14} /> {t.drawTitle}</div>
         <form onSubmit={submit}>
-          <label className="fl">{t.drawSelect}
-            <select value={partId} onChange={(e) => setPartId(e.target.value)}>
-              <option value="">{t.drawSelectPlaceholder}</option>
-              {parts.map((p) => <option key={p.id} value={p.id}>{p.id} - {p.name} ({t.currentStock}: {p.stock})</option>)}
-            </select>
-          </label>
 
-          {/* scan the badge / type the ID */}
+          {/* PART — scan / type the ID */}
+          <label className="fl">{t.drawSelect}
+            <div className="scan-row">
+              <ScanLine size={16} className="scan-ic" />
+              <input
+                type="text"
+                value={partInput}
+                onChange={(e) => setPartInput(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); findPart(partInput) } }}
+                placeholder={t.scanPartPlaceholder || 'Scan or type part ID (e.g. BC-8700)…'}
+                autoComplete="off"
+                autoFocus
+              />
+              {partInput && (
+                <button type="button" className="scan-clear" onClick={clearPart} aria-label="Clear"><X size={14} /></button>
+              )}
+            </div>
+          </label>
+          {part && (
+            <div className="identity-field" style={{ margin: '-8px 0 14px' }}>
+              <Package size={16} />
+              <div>
+                <div><strong>{part.name}</strong>{part.model ? ` · ${part.model}` : ''}</div>
+                <div style={{ fontSize: 11, color: 'var(--ink2)', fontWeight: 500, textTransform: 'none' }}>
+                  #{part.id} · {t.currentStock}: <strong style={{ color: part.stock <= part.min_stock ? 'var(--bad)' : 'var(--ok)' }}>{part.stock}</strong>
+                  {part.bin ? ` · ${t.bin} ${part.bin}` : ''}
+                </div>
+              </div>
+            </div>
+          )}
+          {partErr && !part && (
+            <div className="login-err" style={{ margin: '-8px 0 14px' }}>{partErr}</div>
+          )}
+
+          {/* OPERATOR — scan / type the badge ID */}
           <label className="fl">{t.drawOperator || 'Operator / Mechanic'}
             <div className="scan-row">
               <ScanLine size={16} className="scan-ic" />
@@ -90,17 +131,12 @@ export default function DrawRequests({ t, parts, draws, refresh }) {
                 onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); lookup(idInput) } }}
                 placeholder={t.scanOperatorPlaceholder || 'Scan badge or type ID…'}
                 autoComplete="off"
-                autoFocus
               />
               {idInput && (
-                <button type="button" className="scan-clear" onClick={clearOperator} aria-label="Clear">
-                  <X size={14} />
-                </button>
+                <button type="button" className="scan-clear" onClick={clearOperator} aria-label="Clear"><X size={14} /></button>
               )}
             </div>
           </label>
-
-          {/* live lookup result — read-only confirmation */}
           {looking && (
             <div style={{ fontSize: 12, color: 'var(--ink2)', margin: '-8px 0 14px' }}>{t.loading || 'Looking up…'}</div>
           )}
@@ -123,7 +159,7 @@ export default function DrawRequests({ t, parts, draws, refresh }) {
             <textarea rows="4" placeholder={t.drawReasonPlaceholder} value={reason} onChange={(e) => setReason(e.target.value)} />
           </label>
 
-          <button type="submit" className="btn-primary" disabled={busy || !operator}>
+          <button type="submit" className="btn-primary" disabled={busy || !part || !operator}>
             <CheckCircle size={14} /> {busy ? t.saving : t.drawSubmitBtn}
           </button>
         </form>

@@ -165,3 +165,20 @@ body { background:#e7eaee; padding:20px; margin:0;
   .label-name  { font-size: 10pt; font-weight: 600; }
   .label-model { font-size: 8pt; color: #333; }
 }
+
+/* read-only "authorized by" identity on the draw form */
+.identity-field {
+  display: flex; align-items: center; gap: 8px;
+  background: var(--panel2); border: 1px solid var(--line); border-radius: 8px;
+  padding: 10px 11px; font-size: 13.5px; font-weight: 600; color: var(--ink);
+  text-transform: none; letter-spacing: normal;
+}
+.identity-field svg { color: var(--accent); flex: none; }
+
+/* operator badge scan / ID lookup field */
+.scan-row { display:flex; align-items:center; gap:8px; border:1px solid var(--line); background:var(--panel); border-radius:8px; padding:0 10px; }
+.scan-row:focus-within { border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-bg); }
+.scan-row input { flex:1; border:0; outline:0; background:transparent; padding:9px 0; font-size:13.5px; text-transform:none; letter-spacing:normal; font-weight:450; color:var(--ink); }
+.scan-ic { color:var(--accent); flex:none; }
+.scan-clear { border:0; background:transparent; color:var(--ink2); cursor:pointer; display:grid; place-items:center; padding:4px; border-radius:6px; }
+.scan-clear:hover { color:var(--ink); background:var(--panel2); }

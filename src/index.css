@@ -192,3 +192,11 @@ body { background:#e7eaee; padding:20px; margin:0;
 .row-select { display:flex; flex-direction:column; align-items:center; gap:4px; justify-content:center; margin:0 6px 0 12px; flex:none; }
 .row-qty { width:46px; padding:3px 4px; font-size:11.5px; text-align:center; border:1px solid var(--line); border-radius:5px; color:var(--ink); background:var(--panel); }
 .row-qty:focus { outline:none; border-color:var(--accent); box-shadow:0 0 0 2px var(--accent-bg); }
+
+/* asset edit/delete actions in the detail panel */
+.phead-row { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+.asset-actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:8px; }
+.btn-danger { display:inline-flex; align-items:center; gap:6px; background:var(--bad-bg); color:var(--bad);
+  border:1px solid var(--bad); border-radius:8px; padding:8px 12px; font-size:12px; font-weight:600; cursor:pointer; }
+.btn-danger:hover { background:var(--bad); color:#fff; }
+.btn-danger:disabled { opacity:.5; cursor:not-allowed; }

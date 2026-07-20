@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { createPortal } from 'react-dom'
-import { Factory, Boxes, MapPin, AlertTriangle, Download, QrCode, Printer, X } from 'lucide-react'
+import { Factory, Boxes, MapPin, AlertTriangle, Download, QrCode, Printer, X, Pencil, Trash2, Save } from 'lucide-react'
 import { QRCodeSVG } from 'qrcode.react'
 import { client } from '../neonClient'
 import { exportCSV } from '../lib/csv'
@@ -10,6 +10,11 @@ export default function Registry({ t, machines, parts, filter, setFilter, refres
   const [selected, setSelected] = useState(null)
   const [adj, setAdj] = useState('')
   const [busy, setBusy] = useState(false)
+
+  // (2) edit mode + the draft being edited, (3) delete in progress
+  const [isEditing, setIsEditing] = useState(false)
+  const [draft, setDraft] = useState(null)
+  const [saving, setSaving] = useState(false)
 
   // (2) multi-select for QR printing — id -> {id,name,model,qty}.
   // Tracks WHICH items are selected AND HOW MANY copies of each to print.
@@ -52,6 +57,9 @@ export default function Registry({ t, machines, parts, filter, setFilter, refres
     if (fresh) setSelected(fresh)
   }, [machines, parts]) // eslint-disable-line
 
+  // never leave a half-finished edit open when the user picks another asset
+  useEffect(() => { setIsEditing(false); setDraft(null) }, [selected?.id])
+
   const items = useMemo(() => {
     const pool = mode === 'machines' ? machines : parts
     const f = filter.toLowerCase()
@@ -66,6 +74,69 @@ export default function Registry({ t, machines, parts, filter, setFilter, refres
       else items.forEach((x) => { next[x.id] = next[x.id] || { id: x.id, name: x.name, model: x.model, qty: 1 } })
       return next
     })
+
+  const isPart = (item) => item && item.stock !== undefined && item.stock !== null
+  const table = (item) => (isPart(item) ? 'spare_parts' : 'machines')
+
+  const startEdit = () => {
+    setDraft({ ...selected })
+    setIsEditing(true)
+  }
+  const cancelEdit = () => { setIsEditing(false); setDraft(null) }
+  const setField = (k, v) => setDraft((d) => ({ ...d, [k]: v }))
+
+  // (2) SAVE — UPDATE the row, then refresh so the list + panel show new values
+  const saveEdit = async (e) => {
+    e?.preventDefault?.()
+    if (!draft) return
+    if (!String(draft.name || '').trim()) { alert(t.formErr); return }
+    setSaving(true)
+
+    const payload = isPart(draft)
+      ? {
+          name: draft.name, type: draft.type, model: draft.model,
+          bin: draft.bin, min_stock: parseInt(draft.min_stock) || 0,
+        }
+      : {
+          name: draft.name, type: draft.type, model: draft.model,
+          location: draft.location, status: draft.status,
+        }
+
+    const { error } = await client.from(table(draft)).update(payload).eq('id', draft.id)
+    setSaving(false)
+    if (error) { alert(error.message); return }
+
+    setSelected((prev) => ({ ...prev, ...payload }))  // instant panel update
+    setIsEditing(false); setDraft(null)
+    await refresh()
+  }
+
+  // (3) DELETE — confirm, remove the row, clear the panel
+  const deleteAsset = async () => {
+    if (!selected) return
+    if (!window.confirm(
+      (t.deleteConfirm || 'Are you sure you want to permanently delete this asset?') +
+      `\n\n${selected.id} — ${selected.name}`
+    )) return
+
+    setSaving(true)
+    const { error } = await client.from(table(selected)).delete().eq('id', selected.id)
+    setSaving(false)
+
+    if (error) {
+      // a part that has draw history is protected by a foreign key
+      const fk = /foreign key|violates|referenced/i.test(error.message || '')
+      alert(fk
+        ? (t.deleteBlocked || 'This item cannot be deleted because it has draw-request history. Consider editing it instead.')
+        : error.message)
+      return
+    }
+
+    setChecked((prev) => { const n = { ...prev }; delete n[selected.id]; return n })
+    setSelected(null)          // clear the detail panel immediately
+    setIsEditing(false); setDraft(null)
+    await refresh()            // list updates without a page refresh
+  }
 
   const adjustStock = async () => {
     const amt = parseInt(adj)
@@ -172,18 +243,77 @@ export default function Registry({ t, machines, parts, filter, setFilter, refres
         <div className="detail">
           {selected ? (
             <div className="dpanel">
-              <div className="phead">
-                <p className="phead-sub">{t.systemId}: <strong className="mono">{selected.id}</strong></p>
-                <h2 className="phead-title">{selected.name}</h2>
-              </div>
-              <div className="dgrid">
-                <div><div className="field-l">{t.catClassification}</div><div className="field-v">{selected.type}</div></div>
-                <div><div className="field-l">{t.modelId}</div><div className="field-v">{selected.model}</div></div>
-                {selected.location && <div><div className="field-l">{t.assignedLine}</div><div className="field-v">{selected.location}</div></div>}
-                {selected.bin && <div><div className="field-l">{t.shelfLocation}</div><div className="field-v" style={{ color: 'blue' }}><MapPin size={12} /> {selected.bin}</div></div>}
+              <div className="phead phead-row">
+                <div>
+                  <p className="phead-sub">{t.systemId}: <strong className="mono">{selected.id}</strong></p>
+                  <h2 className="phead-title">{selected.name}</h2>
+                </div>
+                {/* (1) action buttons */}
+                {!isEditing && (
+                  <div className="asset-actions">
+                    <button className="btn-sec" onClick={startEdit} disabled={saving}>
+                      <Pencil size={13} /> {t.editAsset || 'Edit Asset'}
+                    </button>
+                    <button className="btn-danger" onClick={deleteAsset} disabled={saving}>
+                      <Trash2 size={13} /> {t.deleteAsset || 'Delete Asset'}
+                    </button>
+                  </div>
+                )}
               </div>
 
-              {selected.stock !== undefined && selected.stock !== null && (
+              {isEditing ? (
+                /* ---- EDIT MODE ---- */
+                <form onSubmit={saveEdit}>
+                  <div className="dgrid">
+                    <label className="fl">{t.labelName}
+                      <input type="text" value={draft.name || ''} onChange={(e) => setField('name', e.target.value)} />
+                    </label>
+                    <label className="fl">{t.catClassification}
+                      <input type="text" value={draft.type || ''} onChange={(e) => setField('type', e.target.value)} />
+                    </label>
+                    <label className="fl">{t.modelId}
+                      <input type="text" value={draft.model || ''} onChange={(e) => setField('model', e.target.value)} />
+                    </label>
+                    {isPart(draft) ? (
+                      <>
+                        <label className="fl">{t.shelfLocation}
+                          <input type="text" value={draft.bin || ''} onChange={(e) => setField('bin', e.target.value)} />
+                        </label>
+                        <label className="fl">{t.guardLevel}
+                          <input type="number" min="0" value={draft.min_stock ?? 0} onChange={(e) => setField('min_stock', e.target.value)} />
+                        </label>
+                      </>
+                    ) : (
+                      <>
+                        <label className="fl">{t.assignedLine}
+                          <input type="text" value={draft.location || ''} onChange={(e) => setField('location', e.target.value)} />
+                        </label>
+                        <label className="fl">Status
+                          <input type="text" value={draft.status || ''} onChange={(e) => setField('status', e.target.value)} />
+                        </label>
+                      </>
+                    )}
+                  </div>
+                  <div className="asset-actions">
+                    <button type="submit" className="btn-primary" disabled={saving}>
+                      <Save size={14} /> {saving ? t.saving : (t.saveChanges || 'Save Changes')}
+                    </button>
+                    <button type="button" className="btn-sec" onClick={cancelEdit} disabled={saving}>
+                      <X size={13} /> {t.cancel || 'Cancel'}
+                    </button>
+                  </div>
+                </form>
+              ) : (
+                /* ---- VIEW MODE ---- */
+                <div className="dgrid">
+                  <div><div className="field-l">{t.catClassification}</div><div className="field-v">{selected.type}</div></div>
+                  <div><div className="field-l">{t.modelId}</div><div className="field-v">{selected.model}</div></div>
+                  {selected.location && <div><div className="field-l">{t.assignedLine}</div><div className="field-v">{selected.location}</div></div>}
+                  {selected.bin && <div><div className="field-l">{t.shelfLocation}</div><div className="field-v" style={{ color: 'blue' }}><MapPin size={12} /> {selected.bin}</div></div>}
+                </div>
+              )}
+
+              {!isEditing && selected.stock !== undefined && selected.stock !== null && (
                 <div className="stock-action-box">
                   <div className="field-l">{t.maintenanceBox}</div>
                   <div>{t.currentStock}: <strong>{selected.stock}</strong> ({t.guardLevel}: {selected.min_stock})</div>

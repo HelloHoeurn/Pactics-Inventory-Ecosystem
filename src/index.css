@@ -200,3 +200,6 @@ body { background:#e7eaee; padding:20px; margin:0;
   border:1px solid var(--bad); border-radius:8px; padding:8px 12px; font-size:12px; font-weight:600; cursor:pointer; }
 .btn-danger:hover { background:var(--bad); color:#fff; }
 .btn-danger:disabled { opacity:.5; cursor:not-allowed; }
+
+/* "optional" hint on a form label */
+.opt-tag { text-transform:none; font-weight:500; color:var(--muted); letter-spacing:normal; }

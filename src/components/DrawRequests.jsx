@@ -5,12 +5,12 @@ import { client } from '../neonClient'
 export default function DrawRequests({ t, parts, draws, refresh }) {
   const [reason, setReason] = useState('')
   const [busy, setBusy] = useState(false)
+  const [flash, setFlash] = useState('')          // brief confirmation after an auto-submit
 
-  // Refs for the continuous-scan workflow: hardware scanners fire "Enter" at the
-  // end of a scan, so each Enter advances focus to the next field automatically.
+  // Refs for the continuous-scan loop: scan part -> scan badge -> auto-submit -> back to part
   const partInputRef = useRef(null)
   const operatorInputRef = useRef(null)
-  const reasonRef = useRef(null)
+  const submittingRef = useRef(false)             // guards against a double Enter
 
   // logged-in user (records who AUTHORIZED the draw)
   const [user, setUser] = useState(null)
@@ -20,17 +20,23 @@ export default function DrawRequests({ t, parts, draws, refresh }) {
       .catch((e) => console.error('Could not read current user:', e))
   }, [])
 
-  // ---- PART scan + lookup (matches the operator field) ----
+  // ---- PART scan + lookup (from the already-loaded inventory) ----
   const [partInput, setPartInput] = useState('')
   const [part, setPart] = useState(null)
   const [partErr, setPartErr] = useState('')
 
+  const matchPart = (raw) => {
+    const id = String(raw ?? '').trim()
+    if (!id) return null
+    return parts.find((p) => String(p.id).toLowerCase() === id.toLowerCase()) || null
+  }
   const findPart = (raw) => {
     const id = String(raw ?? partInput).trim()
-    if (!id) { setPart(null); setPartErr(''); return }
-    const hit = parts.find((p) => String(p.id).toLowerCase() === id.toLowerCase())
-    if (!hit) { setPart(null); setPartErr((t.partNotFound || 'No part found for ID') + ` "${id}".`); return }
+    if (!id) { setPart(null); setPartErr(''); return null }
+    const hit = matchPart(id)
+    if (!hit) { setPart(null); setPartErr((t.partNotFound || 'No part found for ID') + ` "${id}".`); return null }
     setPart(hit); setPartErr('')
+    return hit
   }
   useEffect(() => {
     if (!partInput.trim()) { setPart(null); setPartErr(''); return }
@@ -39,15 +45,16 @@ export default function DrawRequests({ t, parts, draws, refresh }) {
   }, [partInput, parts]) // eslint-disable-line
   const clearPart = () => { setPartInput(''); setPart(null); setPartErr('') }
 
-  // ---- OPERATOR scan + lookup ----
+  // ---- OPERATOR badge scan + lookup ----
   const [idInput, setIdInput] = useState('')
   const [operator, setOperator] = useState(null)
   const [looking, setLooking] = useState(false)
   const [lookupErr, setLookupErr] = useState('')
 
+  // returns the employee row (or null) so the scan handler can chain straight into submit
   const lookup = async (raw) => {
     const id = String(raw ?? idInput).trim()
-    if (!id) return
+    if (!id) return null
     setLooking(true); setLookupErr(''); setOperator(null)
     const { data, error } = await client
       .from('employees')
@@ -55,10 +62,13 @@ export default function DrawRequests({ t, parts, draws, refresh }) {
       .eq('employee_id', id)
       .limit(1)
     setLooking(false)
-    if (error) { setLookupErr(error.message); return false }
-    if (!data || data.length === 0) { setLookupErr((t.operatorNotFound || 'No operator found for ID') + ` "${id}".`); return false }
+    if (error) { setLookupErr(error.message); return null }
+    if (!data || data.length === 0) {
+      setLookupErr((t.operatorNotFound || 'No operator found for ID') + ` "${id}".`)
+      return null
+    }
     setOperator(data[0])
-    return true
+    return data[0]
   }
   useEffect(() => {
     if (!idInput.trim()) { setOperator(null); setLookupErr(''); return }
@@ -67,61 +77,94 @@ export default function DrawRequests({ t, parts, draws, refresh }) {
   }, [idInput]) // eslint-disable-line
   const clearOperator = () => { setIdInput(''); setOperator(null); setLookupErr('') }
 
-  // --- continuous scanning: Enter advances to the next field ---
-  // A hardware scanner types the value then sends Enter. We stop that Enter from
-  // submitting the form, run the lookup, and move focus to the next input.
+  // ---- core submit: takes the part/operator explicitly so it can be called
+  //      straight from a scan without waiting for React state to settle ----
+  const submitDraw = async (thePart, theOperator) => {
+    if (!thePart || !theOperator) return false
+    if (submittingRef.current) return false          // ignore a duplicated Enter
+    submittingRef.current = true
+    setBusy(true)
+
+    // (1) reason is OPTIONAL — send null when it's blank
+    const cleanReason = reason.trim() ? reason.trim() : null
+
+    const { error } = await client.rpc('draw_part', {
+      p_part_id: thePart.id,
+      p_reason: cleanReason,
+      p_operator_name: theOperator.name_en,
+      p_operator_id: theOperator.employee_id,
+      p_authorized_by: user?.id ?? null,
+      p_qty: 1,
+    })
+
+    setBusy(false)
+    submittingRef.current = false
+
+    if (error) {
+      alert(error.message.includes('INSUFFICIENT_STOCK') ? t.drawError : error.message)
+      return false
+    }
+
+    setFlash(`${thePart.id} → ${theOperator.name_en}`)
+    setTimeout(() => setFlash(''), 2500)
+
+    // reset the form for the next scan cycle
+    setReason(''); clearPart(); clearOperator()
+    await refresh()
+    return true
+  }
+
+  // manual click on "Authorize Stock Distribution"
+  const submit = async (e) => {
+    e?.preventDefault?.()
+    if (!part) { alert(t.scanPartFirst || 'Please scan or enter a valid part ID first.'); return }
+    if (!operator) { alert(t.scanOperatorFirst || 'Please scan or enter the operator / mechanic ID first.'); return }
+    const ok = await submitDraw(part, operator)
+    if (ok) partInputRef.current?.focus()
+  }
+
+  // ---- scan handlers ----
+  // PART: Enter -> look up -> move to the badge field
   const handlePartKeyDown = (e) => {
     if (e.key !== 'Enter') return
-    e.preventDefault()                 // (2) never let Enter submit the form here
-    const id = partInput.trim()
-    if (!id) return
-    const hit = parts.find((p) => String(p.id).toLowerCase() === id.toLowerCase())
+    e.preventDefault()
+    const hit = findPart(partInput)
     if (hit) {
-      setPart(hit); setPartErr('')
-      operatorInputRef.current?.focus()   // (3) jump straight to the badge field
+      operatorInputRef.current?.focus()
       operatorInputRef.current?.select()
     } else {
-      setPart(null)
-      setPartErr((t.partNotFound || 'No part found for ID') + ` "${id}".`)
-      partInputRef.current?.select()     // bad scan: keep focus here to re-scan
+      partInputRef.current?.select()
     }
   }
 
+  // (2)+(3) OPERATOR: Enter -> look up -> SUBMIT the draw -> focus back on the
+  // part field. It never jumps to the reason box, so scanning is uninterrupted.
   const handleOperatorKeyDown = async (e) => {
     if (e.key !== 'Enter') return
     e.preventDefault()
     const id = idInput.trim()
     if (!id) return
-    const found = await lookup(id)
-    if (found) reasonRef.current?.focus()     // continue on to the reason box
-    else operatorInputRef.current?.select()   // bad badge: re-scan in place
-  }
 
-  const submit = async (e) => {
-    e.preventDefault()
-    if (!part) { alert(t.scanPartFirst || 'Please scan or enter a valid part ID first.'); return }
-    if (!reason) return
-    if (!operator) { alert(t.scanOperatorFirst || 'Please scan or enter the operator / mechanic ID first.'); return }
-    setBusy(true)
-    const { error } = await client.rpc('draw_part', {
-      p_part_id: part.id,                    // scanned part
-      p_reason: reason,
-      p_operator_name: operator.name_en,     // scanned operator
-      p_operator_id: operator.employee_id,
-      p_authorized_by: user?.id ?? null,
-      p_qty: 1,
-    })
-    setBusy(false)
-    if (error) { alert(error.message.includes('INSUFFICIENT_STOCK') ? t.drawError : error.message); return }
-    setReason(''); clearPart(); clearOperator()
-    partInputRef.current?.focus()   // ready for the next scan cycle
-    await refresh()
+    const found = await lookup(id)
+    if (!found) { operatorInputRef.current?.select(); return }
+
+    const thePart = part || matchPart(partInput)
+    if (!thePart) {
+      // badge scanned before a valid part — send them back to scan the part
+      setPartErr(t.scanPartFirst || 'Please scan or enter a valid part ID first.')
+      partInputRef.current?.focus()
+      return
+    }
+
+    await submitDraw(thePart, found)   // auto-submit BEFORE resetting focus
+    partInputRef.current?.focus()      // ready for the next item immediately
   }
 
   return (
     <div className="two-col">
       <div className="card">
         <div className="card-h"><Edit3 size={14} /> {t.drawTitle}</div>
+        {flash && <div className="success-banner">✓ {flash}</div>}
         <form onSubmit={submit}>
 
           {/* PART — scan / type the ID */}
@@ -159,7 +202,7 @@ export default function DrawRequests({ t, parts, draws, refresh }) {
             <div className="login-err" style={{ margin: '-8px 0 14px' }}>{partErr}</div>
           )}
 
-          {/* OPERATOR — scan / type the badge ID */}
+          {/* OPERATOR — scanning the badge submits the draw */}
           <label className="fl">{t.drawOperator || 'Operator / Mechanic'}
             <div className="scan-row">
               <ScanLine size={16} className="scan-ic" />
@@ -195,8 +238,16 @@ export default function DrawRequests({ t, parts, draws, refresh }) {
             <div className="login-err" style={{ margin: '-8px 0 14px' }}>{lookupErr}</div>
           )}
 
-          <label className="fl">{t.drawReason}
-            <textarea ref={reasonRef} rows="4" placeholder={t.drawReasonPlaceholder} value={reason} onChange={(e) => setReason(e.target.value)} />
+          {/* (1) REASON — optional, and never grabs focus during scanning */}
+          <label className="fl">
+            {t.drawReason} <span className="opt-tag">({t.optional || 'optional'})</span>
+            <textarea
+              rows="3"
+              placeholder={t.drawReasonPlaceholder}
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              tabIndex={-1}
+            />
           </label>
 
           <button type="submit" className="btn-primary" disabled={busy || !part || !operator}>
@@ -212,7 +263,7 @@ export default function DrawRequests({ t, parts, draws, refresh }) {
         ) : draws.map((r) => (
           <div key={r.id} className="rcard">
             <div className="rcard-name">{t.distributedPart}: <span className="mono">{r.part_id}</span></div>
-            <div className="rcard-reason">{t.reasonLabel}: "{r.reason}"</div>
+            {r.reason ? <div className="rcard-reason">{t.reasonLabel}: "{r.reason}"</div> : null}
             <div style={{ fontSize: 11, color: 'var(--ink2)' }}>
               {t.authorizedTo}: <strong>{r.mechanic || '—'}</strong>
               {r.operator_id && <span className="mono" style={{ marginLeft: 6, opacity: 0.7 }}>#{r.operator_id}</span>}

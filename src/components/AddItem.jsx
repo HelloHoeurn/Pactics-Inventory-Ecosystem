@@ -3,7 +3,10 @@ import { Save } from 'lucide-react'
 import { client } from '../neonClient'
 
 export default function AddItem({ t, setView, refresh }) {
-  const [formType, setFormType] = useState('machine')
+  // (1) default to the spare-part form — parts are registered far more often
+  //     than machines. The toggle's `on` class is driven by this same state,
+  //     so (2) the "Physical Spare Part SKU" button highlights automatically.
+  const [formType, setFormType] = useState('part')
   const [id, setId] = useState('')
   const [name, setName] = useState('')
   const [model, setModel] = useState('')
@@ -49,7 +52,16 @@ export default function AddItem({ t, setView, refresh }) {
         </div>
 
         <form onSubmit={handleCreate}>
-          <label className="fl">{t.labelQr} <input type="text" placeholder={formType === 'machine' ? 'e.g. PAC-M-0099' : 'e.g. SG-8700-V'} value={id} onChange={(e) => setId(e.target.value)} /></label>
+          <label className="fl">{t.labelQr}
+            <input
+              type="text"
+              placeholder={formType === 'machine' ? 'e.g. PAC-M-0099' : 'e.g. SG-8700-V'}
+              value={id}
+              onChange={(e) => setId(e.target.value)}
+              autoFocus
+              autoComplete="off"
+            />
+          </label>
           <label className="fl">{t.labelName} <input type="text" placeholder={formType === 'machine' ? 'Juki Heavy Duty Bartack' : 'Tension Release Spring'} value={name} onChange={(e) => setName(e.target.value)} /></label>
           <label className="fl">{t.labelModel} <input type="text" placeholder="e.g. LK-1900 / Universal" value={model} onChange={(e) => setModel(e.target.value)} /></label>
           <label className="fl">{t.labelLineOrBin} <input type="text" placeholder={formType === 'machine' ? 'e.g. Line 5' : 'e.g. C-03-2'} value={extra} onChange={(e) => setExtra(e.target.value)} /></label>

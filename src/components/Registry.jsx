@@ -272,14 +272,6 @@ export default function Registry({ t, machines, parts, filter, setFilter, refres
               <div className="phead phead-row">
                 <div>
                   <p className="phead-sub">{t.systemId}: <strong className="mono">{selected.id}</strong></p>
-                  {/* Last Updated field — placed near System ID so it's
-                      visible for both machines and parts (machines don't
-                      render the Stock Maintenance box below). Always
-                      rendered (with 'N/A' fallback) so a missing column
-                      is immediately visible instead of silently hidden. */}
-                  <p className="phead-sub" style={{ fontSize: 11, marginTop: 2, display: 'flex', alignItems: 'center', gap: 5 }}>
-                    <Clock size={11} /> {t.lastUpdatedLabel}: <strong>{selected.updated_at ? new Date(selected.updated_at).toLocaleString() : 'N/A'}</strong>
-                  </p>
                   <h2 className="phead-title">{selected.name}</h2>
                 </div>
                 {/* (1) action buttons */}
@@ -351,6 +343,14 @@ export default function Registry({ t, machines, parts, filter, setFilter, refres
                 <div className="stock-action-box">
                   <div className="field-l">{t.maintenanceBox}</div>
                   <div>{t.currentStock}: <strong>{selected.stock}</strong> ({t.guardLevel}: {selected.min_stock})</div>
+                  {/* Last Updated — always rendered (with 'N/A' fallback) so
+                      a missing column is immediately visible.
+                      Note: the app doesn't use Tailwind, so the spec's
+                      `text-xs text-gray-500 mt-1` classes are expressed
+                      here as inline styles matching the app's palette. */}
+                  <div style={{ marginTop: 6, fontSize: 11, color: 'var(--ink2)', display: 'flex', alignItems: 'center', gap: 5 }}>
+                    <Clock size={11} /> {t.lastUpdatedLabel}: <strong>{selected.updated_at ? new Date(selected.updated_at).toLocaleString() : 'N/A'}</strong>
+                  </div>
                   {selected.stock <= selected.min_stock && (
                     <div className="alert-banner" style={{ marginTop: 10 }}><AlertTriangle size={14} /> {t.stockBreachAlert}</div>
                   )}

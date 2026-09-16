@@ -55,9 +55,13 @@ export default function App() {
   const refresh = useCallback(async () => {
     setLoadErr('')
     try {
+      // Explicit column lists (not '*') so newly-added columns like
+      // updated_at appear in the payload even when the Data API's per-endpoint
+      // schema cache is briefly stale after an ALTER TABLE. Add new columns
+      // here when you add them to the schema.
       const [m, p, d] = await Promise.all([
-        client.from('machines').select('*').order('id'),
-        client.from('spare_parts').select('*').order('id'),
+        client.from('machines').select('id,name,type,model,location,status,created_at,updated_at').order('id'),
+        client.from('spare_parts').select('id,name,type,model,stock,min_stock,bin,created_at,updated_at').order('id'),
         client.from('draw_requests').select('*').order('created_at', { ascending: false }).limit(200),
       ])
       const err = m.error || p.error || d.error

@@ -1,9 +1,20 @@
 import { useState, useEffect, useMemo } from 'react'
 import { createPortal } from 'react-dom'
-import { Factory, Boxes, MapPin, AlertTriangle, Download, QrCode, Printer, X, Pencil, Trash2, Save } from 'lucide-react'
+import { Factory, Boxes, MapPin, AlertTriangle, Download, QrCode, Printer, X, Pencil, Trash2, Save, Clock } from 'lucide-react'
 import { QRCodeSVG } from 'qrcode.react'
 import { client } from '../neonClient'
 import { exportCSV } from '../lib/csv'
+
+// 'YYYY-MM-DD HH:mm' in the viewer's local timezone.
+// Uses standard Date methods (locale-independent output) so the badge reads
+// the same for every operator regardless of their browser locale settings.
+const fmtUpdatedAt = (v) => {
+  if (!v) return ''
+  const d = new Date(v)
+  if (isNaN(d.getTime())) return ''
+  const pad = (n) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
 
 export default function Registry({ t, machines, parts, filter, setFilter, refresh }) {
   const [mode, setMode] = useState('parts')
@@ -102,11 +113,20 @@ export default function Registry({ t, machines, parts, filter, setFilter, refres
           location: draft.location, status: draft.status,
         }
 
-    const { error } = await client.from(table(draft)).update(payload).eq('id', draft.id)
+    // .select().single() returns the row AFTER the BEFORE UPDATE trigger
+    // has stamped updated_at, so the optimistic panel update below shows
+    // the correct timestamp immediately instead of waiting for refresh().
+    // Falls back to `payload` if the API doesn't return a row (older behavior).
+    const { data, error } = await client
+      .from(table(draft))
+      .update(payload)
+      .eq('id', draft.id)
+      .select()
+      .single()
     setSaving(false)
     if (error) { alert(error.message); return }
 
-    setSelected((prev) => ({ ...prev, ...payload }))  // instant panel update
+    setSelected((prev) => ({ ...prev, ...(data || payload) }))  // instant panel update
     setIsEditing(false); setDraft(null)
     await refresh()
   }
@@ -235,6 +255,13 @@ export default function Registry({ t, machines, parts, filter, setFilter, refres
                     </span>
                   </div>
                 )}
+                {/* subtle "Last Updated" line, kept muted so it doesn't
+                    compete with the stock badge for attention */}
+                {x.updated_at && (
+                  <div style={{ marginTop: 6, fontSize: 10.5, color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <Clock size={10} /> {t.lastUpdatedLabel}: {fmtUpdatedAt(x.updated_at)}
+                  </div>
+                )}
               </button>
             </div>
           ))}
@@ -246,6 +273,14 @@ export default function Registry({ t, machines, parts, filter, setFilter, refres
               <div className="phead phead-row">
                 <div>
                   <p className="phead-sub">{t.systemId}: <strong className="mono">{selected.id}</strong></p>
+                  {/* Last Updated field — placed near System ID so it's
+                      visible for both machines and parts (machines don't
+                      render the Stock Maintenance box below). */}
+                  {selected.updated_at && (
+                    <p className="phead-sub" style={{ fontSize: 11, marginTop: 2, display: 'flex', alignItems: 'center', gap: 5 }}>
+                      <Clock size={11} /> {t.lastUpdatedLabel}: <strong>{fmtUpdatedAt(selected.updated_at)}</strong>
+                    </p>
+                  )}
                   <h2 className="phead-title">{selected.name}</h2>
                 </div>
                 {/* (1) action buttons */}

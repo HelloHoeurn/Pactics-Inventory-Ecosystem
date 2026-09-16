@@ -1,11 +1,100 @@
-import { useState, useEffect, useRef } from 'react'
-import { Edit3, CheckCircle, UserCheck, ScanLine, X, Package } from 'lucide-react'
+import { useState, useEffect, useRef, useMemo } from 'react'
+import { Edit3, CheckCircle, UserCheck, ScanLine, X, Package, Download, Search } from 'lucide-react'
 import { client } from '../neonClient'
+import { exportCSV } from '../lib/csv'
+
+// YYYY-MM-DD in the viewer's local timezone. Native <input type="date"> gives
+// local calendar days; comparing UTC slices would mis-bucket rows created
+// between local midnight and the UTC offset (e.g. 00:00–07:00 in ICT).
+const localDay = (iso) => {
+  const d = new Date(iso)
+  if (isNaN(d)) return ''
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
 
 export default function DrawRequests({ t, parts, draws, refresh }) {
   const [reason, setReason] = useState('')
   const [busy, setBusy] = useState(false)
   const [flash, setFlash] = useState('')          // brief confirmation after an auto-submit
+
+  // ---- history filter state (drives both the list view AND the CSV export) ----
+  const [drawSearch, setDrawSearch] = useState('')
+  const [dateFrom, setDateFrom] = useState('')    // 'YYYY-MM-DD' or ''
+  const [dateTo, setDateTo] = useState('')
+
+  // O(1) part-name lookup so both the list and the export can enrich rows
+  const partById = useMemo(() => {
+    const m = new Map()
+    for (const p of parts) m.set(String(p.id), p)
+    return m
+  }, [parts])
+
+  // Single source of truth for what's visible AND what gets exported.
+  // If filters are cleared this collapses to the full `draws` prop.
+  const visibleDraws = useMemo(() => {
+    const q = drawSearch.trim().toLowerCase()
+    return draws.filter((r) => {
+      if (dateFrom || dateTo) {
+        const day = localDay(r.created_at)
+        if (dateFrom && day < dateFrom) return false
+        if (dateTo && day > dateTo) return false
+      }
+      if (!q) return true
+      const partName = partById.get(String(r.part_id))?.name || ''
+      return (
+        String(r.part_id || '').toLowerCase().includes(q) ||
+        String(r.mechanic || '').toLowerCase().includes(q) ||
+        String(r.operator_id || '').toLowerCase().includes(q) ||
+        String(r.reason || '').toLowerCase().includes(q) ||
+        partName.toLowerCase().includes(q)
+      )
+    })
+  }, [draws, drawSearch, dateFrom, dateTo, partById])
+
+  const clearFilters = () => { setDrawSearch(''); setDateFrom(''); setDateTo('') }
+  const hasFilter = !!(drawSearch || dateFrom || dateTo)
+
+  // Human-readable local date: 'YYYY-MM-DD HH:MM' (sortable as text, no TZ
+  // ambiguity when opened in Excel by staff in Cambodia).
+  const fmtDate = (v) => {
+    if (!v) return ''
+    const d = new Date(v)
+    if (isNaN(d)) return ''
+    const y = d.getFullYear()
+    const mo = String(d.getMonth() + 1).padStart(2, '0')
+    const da = String(d.getDate()).padStart(2, '0')
+    const hh = String(d.getHours()).padStart(2, '0')
+    const mm = String(d.getMinutes()).padStart(2, '0')
+    return `${y}-${mo}-${da} ${hh}:${mm}`
+  }
+
+  // Filename encodes the active date window so successive exports don't
+  // overwrite each other in the Downloads folder.
+  const exportDraws = () => {
+    const stamp = new Date().toISOString().slice(0, 10)
+    const range = dateFrom || dateTo ? `_${dateFrom || 'start'}_to_${dateTo || stamp}` : ''
+    exportCSV(
+      `draw_requests${range}_${stamp}.csv`,
+      [
+        { key: 'id',         label: 'Request ID' },
+        { key: 'mechanic',   label: 'Requester' },
+        // Item Name is joined from the parts prop so the CSV is self-contained
+        // (no VLOOKUP needed downstream). Falls back to the part_id when the
+        // part row has been deleted from the registry.
+        { key: 'part_id',    label: 'Item Name', format: (v) => partById.get(String(v))?.name || String(v ?? '') },
+        { key: 'qty',        label: 'Quantity',  format: (v) => (v == null ? 1 : v) },
+        // Every recorded row in draw_requests is a committed draw (the RPC
+        // decrements stock atomically), so status is 'Fulfilled' for now.
+        // When you add a real status column, change this format() one-liner.
+        { key: 'id',         label: 'Status',    format: () => 'Fulfilled' },
+        { key: 'created_at', label: 'Date',      format: fmtDate },
+      ],
+      visibleDraws,
+    )
+  }
 
   // Refs for the continuous-scan loop: scan part -> scan badge -> auto-submit -> back to part
   const partInputRef = useRef(null)
@@ -257,10 +346,80 @@ export default function DrawRequests({ t, parts, draws, refresh }) {
       </div>
 
       <div className="col">
-        <div className="col-h">{t.historyTitle}</div>
+        {/* Header: title + export. Export is disabled when the visible set is
+            empty so users don't produce an empty file. */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 12 }}>
+          <div className="col-h" style={{ marginBottom: 0 }}>
+            {t.historyTitle}
+            {hasFilter && (
+              <span style={{ marginLeft: 8, fontSize: 11, color: 'var(--ink2)', fontWeight: 500, textTransform: 'none' }}>
+                ({visibleDraws.length}/{draws.length})
+              </span>
+            )}
+          </div>
+          <button
+            type="button"
+            className="btn-sec"
+            onClick={exportDraws}
+            disabled={visibleDraws.length === 0}
+            title={t.exportDraws}
+          >
+            <Download size={14} /> {t.exportDraws}
+          </button>
+        </div>
+
+        {/* Filter row — search + date range. All three feed `visibleDraws`,
+            which is what the list renders AND what the export writes. */}
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 12 }}>
+          <div className="scan-row" style={{ flex: '1 1 220px', minWidth: 180 }}>
+            <Search size={14} className="scan-ic" />
+            <input
+              type="text"
+              value={drawSearch}
+              onChange={(e) => setDrawSearch(e.target.value)}
+              placeholder={t.filterDrawsPlaceholder}
+              autoComplete="off"
+            />
+            {drawSearch && (
+              <button type="button" className="scan-clear" onClick={() => setDrawSearch('')} aria-label="Clear">
+                <X size={14} />
+              </button>
+            )}
+          </div>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--ink2)', fontWeight: 600, textTransform: 'uppercase' }}>
+            {t.dateFromLabel}
+            <input
+              type="date"
+              value={dateFrom}
+              max={dateTo || undefined}
+              onChange={(e) => setDateFrom(e.target.value)}
+              style={{ border: '1px solid var(--line)', borderRadius: 6, padding: '5px 7px', fontSize: 12, color: 'var(--ink)' }}
+            />
+          </label>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--ink2)', fontWeight: 600, textTransform: 'uppercase' }}>
+            {t.dateToLabel}
+            <input
+              type="date"
+              value={dateTo}
+              min={dateFrom || undefined}
+              onChange={(e) => setDateTo(e.target.value)}
+              style={{ border: '1px solid var(--line)', borderRadius: 6, padding: '5px 7px', fontSize: 12, color: 'var(--ink)' }}
+            />
+          </label>
+          {hasFilter && (
+            <button type="button" className="btn-sec" onClick={clearFilters}>
+              <X size={13} /> {t.clearFilter}
+            </button>
+          )}
+        </div>
+
+        {/* Empty states: distinguish "nothing yet" from "nothing matches" so
+            the operator knows whether to clear the filter or draw something. */}
         {draws.length === 0 ? (
           <div style={{ color: 'gray', fontSize: 13, textAlign: 'center', padding: '40px 0' }}>{t.historyEmpty}</div>
-        ) : draws.map((r) => (
+        ) : visibleDraws.length === 0 ? (
+          <div style={{ color: 'gray', fontSize: 13, textAlign: 'center', padding: '40px 0' }}>{t.noDrawsMatch}</div>
+        ) : visibleDraws.map((r) => (
           <div key={r.id} className="rcard">
             <div className="rcard-name">{t.distributedPart}: <span className="mono">{r.part_id}</span></div>
             {r.reason ? <div className="rcard-reason">{t.reasonLabel}: "{r.reason}"</div> : null}

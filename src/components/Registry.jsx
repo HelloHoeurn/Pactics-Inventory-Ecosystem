@@ -5,17 +5,6 @@ import { QRCodeSVG } from 'qrcode.react'
 import { client } from '../neonClient'
 import { exportCSV } from '../lib/csv'
 
-// 'YYYY-MM-DD HH:mm' in the viewer's local timezone.
-// Uses standard Date methods (locale-independent output) so the badge reads
-// the same for every operator regardless of their browser locale settings.
-const fmtUpdatedAt = (v) => {
-  if (!v) return ''
-  const d = new Date(v)
-  if (isNaN(d.getTime())) return ''
-  const pad = (n) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
-}
-
 export default function Registry({ t, machines, parts, filter, setFilter, refresh }) {
   const [mode, setMode] = useState('parts')
   const [selected, setSelected] = useState(null)
@@ -166,6 +155,16 @@ export default function Registry({ t, machines, parts, filter, setFilter, refres
     setBusy(false)
     setAdj('')
     if (error) { alert(error.message); return }
+    // Optimistic bump so the "Last Updated" field reflects the change before
+    // refresh() lands. The RPC signature is fixed (p_part_id, p_delta), so
+    // updated_at can't be passed as an argument — the DB trigger stamps the
+    // authoritative value server-side; this just mirrors it in local state.
+    // Stock is bumped too so the badge and the timestamp stay consistent.
+    setSelected((prev) => (prev ? {
+      ...prev,
+      stock: (prev.stock ?? 0) + amt,
+      updated_at: new Date().toISOString(),
+    } : prev))
     await refresh()
   }
 
@@ -255,13 +254,13 @@ export default function Registry({ t, machines, parts, filter, setFilter, refres
                     </span>
                   </div>
                 )}
-                {/* subtle "Last Updated" line, kept muted so it doesn't
-                    compete with the stock badge for attention */}
-                {x.updated_at && (
-                  <div style={{ marginTop: 6, fontSize: 10.5, color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: 4 }}>
-                    <Clock size={10} /> {t.lastUpdatedLabel}: {fmtUpdatedAt(x.updated_at)}
-                  </div>
-                )}
+                {/* Subtle "Last Updated" line, kept muted so it doesn't
+                    compete with the stock badge for attention. Always
+                    rendered (with 'N/A' fallback) so a missing column
+                    is immediately visible instead of silently hidden. */}
+                <div style={{ marginTop: 6, fontSize: 10.5, color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <Clock size={10} /> {t.lastUpdatedLabel}: {x.updated_at ? new Date(x.updated_at).toLocaleString() : 'N/A'}
+                </div>
               </button>
             </div>
           ))}
@@ -275,12 +274,12 @@ export default function Registry({ t, machines, parts, filter, setFilter, refres
                   <p className="phead-sub">{t.systemId}: <strong className="mono">{selected.id}</strong></p>
                   {/* Last Updated field — placed near System ID so it's
                       visible for both machines and parts (machines don't
-                      render the Stock Maintenance box below). */}
-                  {selected.updated_at && (
-                    <p className="phead-sub" style={{ fontSize: 11, marginTop: 2, display: 'flex', alignItems: 'center', gap: 5 }}>
-                      <Clock size={11} /> {t.lastUpdatedLabel}: <strong>{fmtUpdatedAt(selected.updated_at)}</strong>
-                    </p>
-                  )}
+                      render the Stock Maintenance box below). Always
+                      rendered (with 'N/A' fallback) so a missing column
+                      is immediately visible instead of silently hidden. */}
+                  <p className="phead-sub" style={{ fontSize: 11, marginTop: 2, display: 'flex', alignItems: 'center', gap: 5 }}>
+                    <Clock size={11} /> {t.lastUpdatedLabel}: <strong>{selected.updated_at ? new Date(selected.updated_at).toLocaleString() : 'N/A'}</strong>
+                  </p>
                   <h2 className="phead-title">{selected.name}</h2>
                 </div>
                 {/* (1) action buttons */}
